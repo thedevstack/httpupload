@@ -2,6 +2,30 @@
 /*
  * This script serves as storing backend for the xmpp extension
  * XEP-0313 Http Upload
+ *
+ * The following return codes are used for requesting a slot:
+ * 200: Success - response body contains PUT URL, GET URL formatted in Json
+ * 400: In case a mandatory parameter is not set.  (error code: 4, parameters: missing_parameter). Mandatory parameters are:
+ *   xmpp_server_key
+ *   filename
+ *   size
+ *   content_type
+ *   user_jid
+ * 406:
+ *   File is empty (error code: 1)
+ *   File too large (error code: 2, parameters: max_file_size)
+ *   Invalid character found in filename (error code: 3, parameters: invalid_character)
+ * 500: Any other server error
+ *   Upload directory for slot cannot be created
+ *   Slot registry file cannot be created
+ * 
+ * The following return codes are used for uploading a file:
+ * 201: Success - File Created
+ * 403: If a slot is already used or file upload contains other data than in the request slot.
+ *   The slot was used before (file already exists)
+ *   The slot does not exist
+ *   File size differs from slot request
+ *   Mime Type differs from slot request
  */
  
 $method = $_SERVER['REQUEST_METHOD'];
@@ -16,16 +40,20 @@ switch ($method) {
 	$xmppServerKey = getMandatoryPostParameter('xmpp_server_key');
 	$filename = getMandatoryPostParameter('filename');
 	$filesize = getMandatoryPostParameter('size');
-	$type = getMandatoryPostParameter('content_type');
+	$type = getOptionalPostParameter('content_type');
 	$userJid = getMandatoryPostParameter('user_jid');
+    // check file size - return 406 (not acceptable) if file too small
+    if ($filesize <= 0) {
+      sendHttpReturnCodeAndJson(406, ['msg' => 'File is empty.', 'err_code' => 1]);
+	}
     // check file size - return 406 (not acceptable) if file too large
     if ($filesize > $config['max_upload_file_size']) {
-      sendHttpErrorCodeAndMessage(406, 'File too large. Maximum file size: '.$config['max_upload_file_size']);
+      sendHttpReturnCodeAndJson(406, ['msg' => 'File too large.', 'err_code' => 2, 'parameters' => ['max_file_size' => $config['max_upload_file_size']]]);
 	}
     // check file name - return 406 (not acceptable) if file contains invalid characters
     foreach ($config['invalid_characters_in_filename'] as $invalidCharacter) {
       if (stripos($filename, $invalidCharacter) !== false) {
-        sendHttpErrorCodeAndMessage(406, 'Invalid character found in filename.');
+        sendHttpReturnCodeAndJson(406, ['msg' => 'Invalid character found in filename.', 'err_code' => 3, 'parameters' => ['invalid_character' => $invalidCharacter]]);
       }
     }
     // generate slot uuid, register slot uuid and expected file size and expected mime type
@@ -33,11 +61,11 @@ switch ($method) {
     $slotUUID = generate_uuid();
     registerSlot($slotUUID, $filename, $filesize, $type, $userJid, $config);
     if (!mkdir(getUploadFilePath($slotUUID, $config))) {
-      sendHttpErrorCodeAndMessage(500, "Could not create directory for upload.");
+      sendHttpReturnCodeAndJson(500, "Could not create directory for upload.");
     }
     // return 200 for success and get / put url Json formatted ( ['get'=>url, 'put'=>url] )
-    $result = array('put' => $config['base_url_put'].$slotUUID.'/'.$filename,
-                    'get' => $config['base_url_get'].$slotUUID.'/'.$filename);
+    $result = ['put' => $config['base_url_put'].$slotUUID.'/'.$filename,
+                    'get' => $config['base_url_get'].$slotUUID.'/'.$filename];
     echo json_encode($result);
     break;
   case 'PUT':
@@ -45,14 +73,17 @@ switch ($method) {
     $uri = $_SERVER["REQUEST_URI"];
     $slotUUID = getUUIDFromUri($uri);
     $filename = getFilenameFromUri($uri);
-    $uploadFilePath = getUploadFilePath($slotUUID, $config, $filename);
-    if (file_exists($uploadFilePath)) {
-      sendHttpErrorCodeAndMessage(403, "The slot was already used.");
-    }
     if (!slotExists($slotUUID, $config)) {
-      sendHttpErrorCodeAndMessage(403, "The slot does not exist.");
+      sendHttpReturnCodeAndJson(403, "The slot does not exist.");
     }
     $slotParameters = require(getSlotFilePath($slotUUID, $config));
+    if ($slotParameters['filename'] != $filename) {
+      sendHttpReturnCodeAndJson(403, "Uploaded filename differs from requested slot filename.");
+    }
+    $uploadFilePath = getUploadFilePath($slotUUID, $config, $filename);
+    if (file_exists($uploadFilePath)) {
+      sendHttpReturnCodeAndJson(403, "The slot was already used.");
+    }
     // save file
     $incomingFileStream = fopen("php://input", "r");
     $targetFileStream = fopen($uploadFilePath, "w");
@@ -60,31 +91,47 @@ switch ($method) {
     fclose($targetFileStream);
     // check actual file size with registered file size - return 413
     if ($uploadedFilesize != $slotParameters['filesize']) {
-      unlink($uploadedFilePath);
-      sendHttpErrorCodeAndMessage(403, "Uploaded file size differs from requestes slot size.");
+      unlink($uploadFilePath);
+      sendHttpReturnCodeAndJson(403, "Uploaded file size differs from requested slot size.");
     }
     // check actual mime type with registered mime type
-    if (mime_content_type($uploadFilePath) != $slotParameters['content_type']) {
-      unlink($uploadedFilePath);
-      sendHttpErrorCodeAndMessage(403, "Uploaded file content type differs from requestes slot content type.");
+    if (!is_null($slotParameters['content_type']) && !empty($slotParameters['content_type']) && mime_content_type($uploadFilePath) != $slotParameters['content_type']) {
+      unlink($uploadFilePath);
+      sendHttpReturnCodeAndJson(403, "Uploaded file content type differs from requested slot content type.");
     }
     // return 500 in case of any error
     // return 201 for success
-    sendHttpErrorCodeAndMessage(201);
+    sendHttpReturnCodeAndMessage(201);
     break;
-  case 'GET': // better use really apache to serve files...
+  default:
+    sendHttpReturnCodeAndJson(403, "Access not allowed.");
     break;
 }
 
 function getMandatoryPostParameter($parameterName) {
   $parameter = $_POST[$parameterName];
   if (!isset($parameter) || is_null($parameter) || empty($parameter)) {
-    sendHttpErrorCodeAndMessage(400, 'Missing parameter "'.$parameterName.'"');
+    sendHttpReturnCodeAndJson(400, ['msg' => 'Missing parameter.', 'err_code' => 4, 'parameters' => ['missing_parameter' => $parameterName]]);
   }
   return $parameter;
 }
 
-function sendHttpErrorCodeAndMessage($code, $text = '') {
+function getOptionalPostParameter($parameterName) {
+  $parameter = $_POST[$parameterName];
+  if (!isset($parameter) || is_null($parameter) || empty($parameter)) {
+    $parameter = NULL;
+  }
+  return $parameter;
+}
+
+function sendHttpReturnCodeAndJson($code, $data) {
+  if (!is_array($data)) {
+    $data = ['msg' => $data];
+  }
+  sendHttpReturnCodeAndMessage($code, json_encode($data));
+}
+
+function sendHttpReturnCodeAndMessage($code, $text = '') {
   http_response_code($code);
   exit($text);
 }
@@ -96,16 +143,16 @@ function getUUIDFromUri($uri) {
 }
 
 function getFilenameFromUri($uri) {
-  $lastSlash = strrpos($uri, '/');
+  $lastSlash = strrpos($uri, '/') + 1;
   return substr($uri, $lastSlash);
 }
 
 function registerSlot($slotUUID, $filename, $filesize, $contentType, $userJid, $config) {
   $contents = "<?php\n/*\n * This is an autogenerated file - do not edit\n */\n\n";
-  $contents .= 'return array(\'filename\' => \''.$filename.'\', \'filesize\' => \''.$filesize.'\', ';
-  $contents .= '\'content_type\' => \''.$contentType.'\', \'user_jid\' => \''.$userJid.'\');';
+  $contents .= 'return [\'filename\' => \''.$filename.'\', \'filesize\' => \''.$filesize.'\', ';
+  $contents .= '\'content_type\' => \''.$contentType.'\', \'user_jid\' => \''.$userJid.'\'];';
   if (!file_put_contents(getSlotFilePath($slotUUID, $config), $contents)) {
-    sendHttpErrorCodeAndMessage(500, "Could not create slot registry entry.");
+    sendHttpReturnCodeAndMessage(500, "Could not create slot registry entry.");
   }
 }
 
