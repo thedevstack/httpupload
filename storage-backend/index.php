@@ -31,7 +31,12 @@
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Load configuration
-$config = require('config.php');
+$config = require(__DIR__.'/config/config.php');
+// Initialize directory config
+$config['storage_base_path'] = __DIR__.'/files/';
+$config['slot_registry_dir'] = __DIR__.'/slots/';
+$config['base_url_put'] = getServerProtocol()."://".getRequestHostname().getRequestUriWithoutFilename().'files/';
+$config['base_url_get'] = $config['base_url_put'];
 
 switch ($method) {
   case 'POST':
@@ -170,6 +175,41 @@ function getUploadFilePath($slotUUID, $config, $filename = NULL) {
     $path .= '/'.$filename;
   }
   return $path;
+}
+
+/**
+ * Inspired by https://github.com/owncloud/core/blob/master/lib/private/appframework/http/request.php#L523
+ */
+function getServerProtocol() {
+  if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+      if (strpos($_SERVER['HTTP_X_FORWARDED_PROTO'], ',') !== false) {
+          $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO']);
+          $proto = strtolower(trim($parts[0]));
+      } else {
+          $proto = strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']);
+      }
+      // Verify that the protocol is always HTTP or HTTPS
+      // default to http if an invalid value is provided
+      return $proto === 'https' ? 'https' : 'http';
+  }
+  if (isset($_SERVER['HTTPS'])
+      && $_SERVER['HTTPS'] !== null
+      && $_SERVER['HTTPS'] !== 'off'
+      && $_SERVER['HTTPS'] !== '') {
+      return 'https';
+  }
+  return 'http';
+}
+
+function getRequestHostname() {
+  if (isset($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+    return strtolower($_SERVER['HTTP_X_FORWARDED_HOST']);
+  }
+  return strtolower($_SERVER['HTTP_HOST']);
+}
+
+function getRequestUriWithoutFilename() {
+  return strtolower(substr($_SERVER['REQUEST_URI'], 0, strrpos($_SERVER['REQUEST_URI'], '/') + 1));
 }
 
 /**
