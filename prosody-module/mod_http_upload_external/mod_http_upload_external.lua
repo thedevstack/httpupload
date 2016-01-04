@@ -29,30 +29,30 @@ module:add_feature(xmlns_http_upload);
 
 -- hooks
 module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
-	local stanza, origin = event.stanza, event.origin;
+   local stanza, origin = event.stanza, event.origin;
    local orig_from = stanza.attr.from;
-	local request = stanza.tags[1];
-	-- local clients only
-	if origin.type ~= "c2s" then
-		origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
-		return true;
-	end
-	-- validate
-	local filename = request:get_child_text("filename");
-	if not filename then
-		origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid filename"));
-		return true;
-	end
-	local filesize = tonumber(request:get_child_text("size"));
-	if not filesize then
-		origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid file size"));
-		return true;
-	elseif filesize > file_size_limit then
-		origin.send(st.error_reply(stanza, "modify", "not-acceptable", "File too large",
-			st.stanza("file-too-large", {xmlns=xmlns_http_upload})
-				:tag("max-size"):text(tostring(file_size_limit))));
-		return true;
-	end
+   local request = stanza.tags[1];
+   -- local clients only
+   if origin.type ~= "c2s" then
+      origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
+      return true;
+   end
+   -- validate
+   local filename = request:get_child_text("filename");
+   if not filename then
+      origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid filename"));
+      return true;
+   end
+   local filesize = tonumber(request:get_child_text("size"));
+   if not filesize then
+      origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid file size"));
+      return true;
+   elseif filesize > file_size_limit then
+      origin.send(st.error_reply(stanza, "modify", "not-acceptable", "File too large",
+         st.stanza("file-too-large", {xmlns=xmlns_http_upload})
+            :tag("max-size"):text(tostring(file_size_limit))));
+      return true;
+   end
 
    local content_type = request:get_child_text("content-type");
    
@@ -125,10 +125,10 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
       return true;
    end
 
-	local reply = st.reply(stanza);
-	reply:tag("slot", { xmlns = xmlns_http_upload });
-	reply:tag("get"):text(get_url):up();
-	reply:tag("put"):text(put_url):up();
-	origin.send(reply);
-	return true;
+   local reply = st.reply(stanza);
+   reply:tag("slot", { xmlns = xmlns_http_upload });
+   reply:tag("get"):text(get_url):up();
+   reply:tag("put"):text(put_url):up();
+   origin.send(reply);
+   return true;
 end);
