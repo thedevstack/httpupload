@@ -16,7 +16,7 @@ local xmpp_server_key = "1323978hjkgh12";
 -- imports
 local st = require"util.stanza";
 local http = require"socket.http";
-local json = require"dkjson";
+local json = module:require "dkjson";
 local t_concat = table.concat;
 
 -- depends
