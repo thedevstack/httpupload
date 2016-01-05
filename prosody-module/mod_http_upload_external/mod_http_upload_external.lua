@@ -52,7 +52,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    local content_type = request:get_child_text("content-type");
    
    -- build the body
-   local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&size=" .. size .. "&filename=" .. filename .. "&user_jid=" .. user_jid;
+   local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&size=" .. filesize .. "&filename=" .. filename .. "&user_jid=" .. orig_from;
    if content_type then
       reqbody = reqbody .. "&content_type=" .. content_type;
    end
