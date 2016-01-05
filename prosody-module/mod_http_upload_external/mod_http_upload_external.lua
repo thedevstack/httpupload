@@ -65,29 +65,29 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    local put_url = nil;
 
    -- check the response
-   if statuscode == "500" then
+   if statuscode == 500 then
       origin.send(st.error_reply(stanza, "cancel", "service-unavailable", respbody));
-   elseif statuscode == "406" or statuscode == "400" then
+   elseif statuscode == 406 or statuscode == 400 then
       local errobj, pos, err = json.decode(respbody);
       if err then
          origin.send(st.error_reply(stanza, "wait", "internal-server-error", err));
          return true;
       else
          if errobj["err_code"] ~= nil and errobj["msg"] ~= nil then
-            if errobj.err_code == "1" then
+            if errobj.err_code == 1 then
                origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg));
                return true;
-            elseif errobj.err_code == "2" then
+            elseif errobj.err_code == 2 then
                origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg,
                   st.stanza("file-too-large", {xmlns=xmlns_http_upload})
                      :tag("max-size"):text(errobj.parameters.max_file_size)));
                return true;
-            elseif errobj.err_code == "3" then
+            elseif errobj.err_code == 3 then
                origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg,
                   st.stanza("invalid-character", {xmlns=xmlns_http_upload})
                      :text(errobj.parameters.invalid_character)));
                return true;
-            elseif errobj.err_code == "4" then
+            elseif errobj.err_code == 4 then
                origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg,
                   st.stanza("missing-parameter", {xmlns=xmlns_http_upload})
                      :text(errobj.parameters.missing_parameter)));
@@ -101,15 +101,15 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
             return true;
          end
       end
-   elseif statuscode == "200" then
+   elseif statuscode == 200 then
       local respobj, pos, err = json.decode(respbody);
       if err then
          origin.send(st.error_reply(stanza, "wait", "internal-server-error", err));
          return true;
       else
-         if obj["get"] ~= nil and obj["put"] ~= nil then
-            get_url = obj.get;
-            put_url = obj.put;
+         if respobj["get"] ~= nil and respobj["put"] ~= nil then
+            get_url = respobj.get;
+            put_url = respobj.put;
          else
             origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "get or put not found"));
             return true;
