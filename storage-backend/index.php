@@ -32,7 +32,7 @@
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Load configuration
-$config = require(__DIR__.'/config/config.php');
+$config = require(__DIR__.'/config/config.inc.php');
 // Initialize directory config
 $config['storage_base_path'] = __DIR__.'/files/';
 $config['slot_registry_dir'] = __DIR__.'/slots/';
