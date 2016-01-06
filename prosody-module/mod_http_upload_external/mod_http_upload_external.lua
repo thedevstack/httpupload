@@ -66,7 +66,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    -- check the response
    if statuscode == 500 then
       origin.send(st.error_reply(stanza, "cancel", "service-unavailable", respbody));
-   elseif statuscode == 406 or statuscode == 400 then
+   elseif statuscode == 406 or statuscode == 400 or statuscode == 403 then
       local errobj, pos, err = json.decode(respbody);
       if err then
          origin.send(st.error_reply(stanza, "wait", "internal-server-error", err));
@@ -95,6 +95,8 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
                origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
                return true;
             end
+         elseif statuscode == 403 and errobj["msg"] ~= nil then
+            origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg));
          else
             origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "msg or err_code not found"));
             return true;
