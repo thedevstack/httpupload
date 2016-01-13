@@ -86,11 +86,11 @@ switch ($method) {
     if (!slotExists($slotUUID, $config)) {
       sendHttpReturnCodeAndJson(403, "The slot does not exist.");
     }
-    $slotParameters = require(getSlotFilePath($slotUUID, $config));
-    if ($slotParameters['filename'] != $filename) { // Works because filename is rawurlencoded in slot store and filename is from PUT URL
+    $slotParameters = loadSlotParameters($slotUUID, $config);
+    if (!checkFilenameParameter($filename, $slotParameters)) {
       sendHttpReturnCodeAndJson(403, "Uploaded filename differs from requested slot filename.");
     }
-    $uploadFilePath = getUploadFilePath($slotUUID, $config, rawurldecode($filename));
+    $uploadFilePath = getUploadFilePath($slotUUID, $config, $slotParameters['filename']);
     if (file_exists($uploadFilePath)) {
       sendHttpReturnCodeAndJson(403, "The slot was already used.");
     }
@@ -125,6 +125,18 @@ function checkXmppServerKey($validXmppServerKeys, $xmppServerKey) {
     }
   }
   return false;
+}
+
+function checkFilenameParameter($filename, $slotParameters) {
+  $filename = rawurldecode($filename); // the filename is a http get parameter and therefore encoded
+  return $slotParameters['filename'] == $filename;
+}
+
+function loadSlotParameters($slotUUID, $config) {
+  $slotParameters = require(getSlotFilePath($slotUUID, $config));
+  $slotParameters['filename'] = rawurldecode($slotParameters['filename']);
+  
+  return $slotParameters;
 }
 
 function getMandatoryPostParameter($parameterName) {
