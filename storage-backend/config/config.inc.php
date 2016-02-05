@@ -11,3 +11,4 @@ return [
   // Array of characters which are not allowed in filenames
   'invalid_characters_in_filename' => ['/'],
 ];
+?>
