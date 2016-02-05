@@ -90,7 +90,7 @@ switch ($method) {
     if (!checkFilenameParameter($filename, $slotParameters)) {
       sendHttpReturnCodeAndJson(403, "Uploaded filename differs from requested slot filename.");
     }
-    $uploadFilePath = getUploadFilePath($slotUUID, $config, $slotParameters['filename']);
+    $uploadFilePath = rawurldecode(getUploadFilePath($slotUUID, $config, $slotParameters['filename']));
     if (file_exists($uploadFilePath)) {
       sendHttpReturnCodeAndJson(403, "The slot was already used.");
     }
