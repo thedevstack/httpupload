@@ -10,8 +10,8 @@
 --
 
 -- configuration
-local external_url = "https://snippets.thedevstack.de/httpupload/index.php";
-local xmpp_server_key = "1323978hjkgh12";
+local external_url = module:get_option("http_upload_external_url");
+local xmpp_server_key = module:get_option("http_upload_external_server_key");
 
 -- imports
 local st = require"util.stanza";
@@ -34,6 +34,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    -- local clients only
    if origin.type ~= "c2s" then
       origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
+      return true;
+   end
+   -- check configuration
+   if not external_url or not xmpp_server_key then
+      module:log("debug", "missing configuration options: http_upload_external_url and/or http_upload_external_server_key");
+      origin.send(st.error_reply(stanza, "cancel", "internal-server-error"));
       return true;
    end
    -- validate
