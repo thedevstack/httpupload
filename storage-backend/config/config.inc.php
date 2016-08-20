@@ -10,5 +10,7 @@ return [
   'max_upload_file_size' => 10 * 1024 * 1024,
   // Array of characters which are not allowed in filenames
   'invalid_characters_in_filename' => ['/'],
+  // Validity time of a delete token in seconds
+  'delete_token_validity' => 5 * 60,
 ];
 ?>

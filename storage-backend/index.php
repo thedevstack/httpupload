@@ -1,9 +1,9 @@
 <?php
 /*
  * This script serves as storing backend for the xmpp extension
- * XEP-0313 Http Upload
+ * XEP-0363 Http Upload and for the extension to delete a file previously uploaded via HTTP upload
  *
- * The following return codes are used for requesting a slot:
+ * The following return codes are used for requesting an upload slot (parameter 'slot_type' = 'upload' or empty):
  * 200: Success - response body contains PUT URL, GET URL formatted in Json
  * 400: In case a mandatory parameter is not set.  (error code: 4, parameters: missing_parameter). Mandatory parameters are:
  *   xmpp_server_key
@@ -20,6 +20,18 @@
  *   Upload directory for slot cannot be created
  *   Slot registry file cannot be created
  * 
+ * The following return codes are used for requesting an delete slot (parameter 'slot_type' = 'delete'):
+ * 200: Success - response body contains delete_token formatted in Json
+ * 400: In case a mandatory parameter is not set.  (error code: 4, parameters: missing_parameter). Mandatory parameters are:
+ *   xmpp_server_key
+ *   file_url
+ *   user_jid
+ * 403: In case the XMPP Server Key is not valid
+ * 406:
+ *   Invalid character found in filename (error code: 3, parameters: invalid_character)
+ * 500: Any other server error
+ *   Slot registry file cannot be updated with delete token and token validity time
+ 
  * The following return codes are used for uploading a file:
  * 201: Success - File Created
  * 403: If a slot is already used or file upload contains other data than in the request slot.
@@ -27,6 +39,14 @@
  *   The slot does not exist
  *   File size differs from slot request
  *   Mime Type differs from slot request
+ * 
+ * The following return codes are used for deleting a file:
+ * 204: Success - No Content
+ * 403: If a slot does not exist or a slot is not marked for deletion.
+ *   The slot does not exist
+ *   The slot does not contain a delete token
+ *   The slot's delete token does not match the header field "X-FILETRANSFER-HTTP-DELETE-TOKEN"
+ *   The slot's delete token is not valid any more
  */
  
 $method = $_SERVER['REQUEST_METHOD'];
@@ -44,38 +64,64 @@ switch ($method) {
     // parse post parameters
     // check if all parameters are present - return 400 (bad request) if a parameter is missing / empty
 	$xmppServerKey = getMandatoryPostParameter('xmpp_server_key');
-	$filename = rawurlencode(getMandatoryPostParameter('filename'));
-	$filesize = getMandatoryPostParameter('size');
-	$type = getOptionalPostParameter('content_type');
 	$userJid = getMandatoryPostParameter('user_jid');
+	$slotType = getOptionalPostParameter('slot_type', 'upload');
+    
     // Check if xmppServerKey is allowed to request slots
     if (false === checkXmppServerKey($config['valid_xmpp_server_keys'], $xmppServerKey)) {
       sendHttpReturnCodeAndJson(403, 'Server is not allowed to request an upload slot');
     }
-    // check file size - return 406 (not acceptable) if file too small
-    if ($filesize <= 0) {
-      sendHttpReturnCodeAndJson(406, ['msg' => 'File is empty.', 'err_code' => 1]);
-	}
-    // check file size - return 406 (not acceptable) if file too large
-    if ($filesize > $config['max_upload_file_size']) {
-      sendHttpReturnCodeAndJson(406, ['msg' => 'File too large.', 'err_code' => 2, 'parameters' => ['max_file_size' => $config['max_upload_file_size']]]);
-	}
-    // check file name - return 406 (not acceptable) if file contains invalid characters
-    foreach ($config['invalid_characters_in_filename'] as $invalidCharacter) {
-      if (stripos($filename, $invalidCharacter) !== false) {
-        sendHttpReturnCodeAndJson(406, ['msg' => 'Invalid character found in filename.', 'err_code' => 3, 'parameters' => ['invalid_character' => $invalidCharacter]]);
-      }
+    
+    switch ($slotType) {
+      case 'delete':
+        // Check if all parameters needed for an delete are present - return 400 (bad request) if a parameter is missing / empty
+        $fileURL = getMandatoryPostParameter('file_url');
+        
+        $slotUUID = getUUIDFromUri($fileURL);
+        $filename = getFilenameFromUri($fileURL);
+        if (!slotExists($slotUUID, $config)) {
+          sendHttpReturnCodeAndJson(403, "The slot does not exist.");
+        }
+        
+        // generate delete token, register delete token
+        $deleteToken = generate_uuid();
+        registerDeleteToken($slotUUID, $filename, $deleteToken, $config);
+        
+        // return 200 for success and delete url Json formatted ( ['delete'=>url] )
+        $result = ['delete_token' => $deleteToken];
+      break;
+      case 'upload':
+      default:
+        // Check if all parameters needed for an upload are present - return 400 (bad request) if a parameter is missing / empty
+        $filename = rawurlencode(getMandatoryPostParameter('filename'));
+        $filesize = getMandatoryPostParameter('size');
+        $mimeType = getOptionalPostParameter('content_type');
+        
+        // check file name - return 406 (not acceptable) if file contains invalid characters
+        foreach ($config['invalid_characters_in_filename'] as $invalidCharacter) {
+          if (stripos($filename, $invalidCharacter) !== false) {
+            sendHttpReturnCodeAndJson(406, ['msg' => 'Invalid character found in filename.', 'err_code' => 3, 'parameters' => ['invalid_character' => $invalidCharacter]]);
+          }
+        }
+        // check file size - return 406 (not acceptable) if file too small
+        if ($filesize <= 0) {
+          sendHttpReturnCodeAndJson(406, ['msg' => 'File is empty.', 'err_code' => 1]);
+        }
+        // check file size - return 406 (not acceptable) if file too large
+        if ($filesize > $config['max_upload_file_size']) {
+          sendHttpReturnCodeAndJson(406, ['msg' => 'File too large.', 'err_code' => 2, 'parameters' => ['max_file_size' => $config['max_upload_file_size']]]);
+        }
+        // generate slot uuid, register slot uuid and expected file size and expected mime type
+        $slotUUID = generate_uuid();
+        registerSlot($slotUUID, $filename, $filesize, $mimeType, $userJid, $config);
+        if (!mkdir(getUploadFilePath($slotUUID, $config))) {
+          sendHttpReturnCodeAndJson(500, "Could not create directory for upload.");
+        }
+        // return 200 for success and get / put url Json formatted ( ['get'=>url, 'put'=>url] )
+        $result = ['put' => $config['base_url_put'].$slotUUID.'/'.$filename,
+                   'get' => $config['base_url_get'].$slotUUID.'/'.$filename];
     }
-    // generate slot uuid, register slot uuid and expected file size and expected mime type
-    $basePath = $config['storage_base_path'];
-    $slotUUID = generate_uuid();
-    registerSlot($slotUUID, $filename, $filesize, $type, $userJid, $config);
-    if (!mkdir(getUploadFilePath($slotUUID, $config))) {
-      sendHttpReturnCodeAndJson(500, "Could not create directory for upload.");
-    }
-    // return 200 for success and get / put url Json formatted ( ['get'=>url, 'put'=>url] )
-    $result = ['put' => $config['base_url_put'].$slotUUID.'/'.$filename,
-                    'get' => $config['base_url_get'].$slotUUID.'/'.$filename];
+    
     echo json_encode($result);
     break;
   case 'PUT':
@@ -113,6 +159,40 @@ switch ($method) {
     // return 201 for success
     sendHttpReturnCodeAndMessage(201);
     break;
+  case 'DELETE':
+    // check slot uuid - return 403 if not existing
+    $uri = $_SERVER["REQUEST_URI"];
+    $slotUUID = getUUIDFromUri($uri);
+    $filename = getFilenameFromUri($uri);
+    $deleteToken = $_SERVER["HTTP_X_FILETRANSFER_HTTP_DELETE_TOKEN"];
+    if (!slotExists($slotUUID, $config)) {
+      sendHttpReturnCodeAndJson(403, "The slot does not exist.");
+    }
+    $slotParameters = loadSlotParameters($slotUUID, $config);
+    if ($deleteToken != $slotParameters['delete_token']) {
+      sendHttpReturnCodeAndJson(403, "The delete token is not valid.");
+    }
+    if (time() > $slotParameters['delete_token_valid_till']) {
+      sendHttpReturnCodeAndJson(403, "The delete token is not valid anymore.");
+    }
+    if (!checkFilenameParameter($filename, $slotParameters)) {
+      sendHttpReturnCodeAndJson(403, "Filename to delete differs from requested slot filename.");
+    }
+    $uploadFilePath = rawurldecode(getUploadFilePath($slotUUID, $config, $slotParameters['filename']));
+    if (!file_exists($uploadFilePath)) {
+      sendHttpReturnCodeAndJson(404, "The file does not exist.");
+    }
+    
+    // Delete file
+    if (unlink($uploadFilePath)) {
+      // Clean up the server - ignore errors
+      @rmdir(getUploadFilePath($slotUUID, $config));
+      // return 204 for success
+      sendHttpReturnCodeAndMessage(204);
+    } else {
+      sendHttpReturnCodeAndJson(500, "Could not delete file.");
+    }
+    break;
   default:
     sendHttpReturnCodeAndJson(403, "Access not allowed.");
     break;
@@ -147,10 +227,10 @@ function getMandatoryPostParameter($parameterName) {
   return $parameter;
 }
 
-function getOptionalPostParameter($parameterName) {
+function getOptionalPostParameter($parameterName, $default = NULL) {
   $parameter = $_POST[$parameterName];
   if (!isset($parameter) || is_null($parameter) || empty($parameter)) {
-    $parameter = NULL;
+    $parameter = $default;
   }
   return $parameter;
 }
@@ -184,6 +264,16 @@ function registerSlot($slotUUID, $filename, $filesize, $contentType, $userJid, $
   $contents .= '\'content_type\' => \''.$contentType.'\', \'user_jid\' => \''.$userJid.'\'];\n?>';
   if (!file_put_contents(getSlotFilePath($slotUUID, $config), $contents)) {
     sendHttpReturnCodeAndMessage(500, "Could not create slot registry entry.");
+  }
+}
+
+function registerDeleteToken($slotUUID, $filename, $deleteToken, $config) {
+  $slotFilePath = getSlotFilePath($slotUUID, $config);
+  $contents = file_get_contents($slotFilePath);
+  $validTo = time() + $config['delete_token_validity'];
+  $newContents = str_replace("]", ", 'delete_token' => '".$deleteToken."', 'delete_token_valid_till' => '".$validTo."']", $contents);
+  if (!file_put_contents($slotFilePath, $newContents)) {
+    sendHttpReturnCodeAndMessage(500, "Could not update slot registry entry.");
   }
 }
 
