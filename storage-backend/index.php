@@ -27,8 +27,6 @@
  *   file_url
  *   user_jid
  * 403: In case the XMPP Server Key is not valid
- * 406:
- *   Invalid character found in filename (error code: 3, parameters: invalid_character)
  * 500: Any other server error
  *   Slot registry file cannot be updated with delete token and token validity time
  
