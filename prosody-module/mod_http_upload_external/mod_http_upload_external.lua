@@ -59,7 +59,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      local content_type = request:get_child_text("content-type");
      
      -- build the body
-     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&size=" .. filesize .. "&filename=" .. filename .. "&user_jid=" .. orig_from;
+     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=upload&size=" .. filesize .. "&filename=" .. filename .. "&user_jid=" .. orig_from;
      if content_type then
         reqbody = reqbody .. "&content_type=" .. content_type;
      end
@@ -142,7 +142,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
         return true;
      end
      -- build the body
-     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&size=" .. filesize .. "&filename=" .. filename .. "&user_jid=" .. orig_from;
+     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
      -- the request
      local respbody, statuscode = http.request(external_url, reqbody);
      respbody = string.gsub(respbody, "\\/", "/")
@@ -194,7 +194,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
 
      local reply = st.reply(stanza);
      reply:tag("slot", { xmlns = xmlns_http_upload });
-     reply:tag("deletetoken"):text(deletetoken):up();
+     reply:tag("deletetoken"):text(delete_token):up();
      origin.send(reply);
    else
     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
