@@ -86,7 +86,7 @@ switch ($method) {
         registerDeleteToken($slotUUID, $filename, $deleteToken, $config);
         
         // return 200 for success and delete url Json formatted ( ['delete'=>url] )
-        $result = ['delete_token' => $deleteToken];
+        $result = ['deletetoken' => $deleteToken];
       break;
       case 'upload':
       default:
