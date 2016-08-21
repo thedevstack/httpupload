@@ -12,5 +12,7 @@ return [
   'invalid_characters_in_filename' => ['/'],
   // Validity time of a delete token in seconds
   'delete_token_validity' => 5 * 60,
+  // Flag to whether deletion is only allowed by creator or anybody
+  'delete_only_by_creator' => true,
 ];
 ?>

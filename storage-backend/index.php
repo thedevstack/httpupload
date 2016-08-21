@@ -81,6 +81,13 @@ switch ($method) {
           sendHttpReturnCodeAndJson(403, "The slot does not exist.");
         }
         
+        if ($config['delete_only_by_creator']) {
+          $slotParameters = loadSlotParameters($slotUUID, $config);
+          if ($slotParameters['user_jid'] != $userJid) {
+            sendHttpReturnCodeAndJson(403, "Deletion of that file is only allowed by the user created it.");
+          }
+        }
+        
         // generate delete token, register delete token
         $deleteToken = generate_uuid();
         registerDeleteToken($slotUUID, $filename, $deleteToken, $config);
