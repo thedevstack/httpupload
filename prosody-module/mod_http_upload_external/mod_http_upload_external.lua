@@ -43,7 +43,8 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
       return true;
    end
    local slot_type = request.attr.type;
-   if not slot_type or slot_type ~= "upload" then
+   module:log("debug", "incoming request is of type " .. slot_type);
+   if not slot_type or slot_type == "upload" then
      -- validate
      local filename = request:get_child_text("filename");
      if not filename then
@@ -134,7 +135,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      reply:tag("get"):text(get_url):up();
      reply:tag("put"):text(put_url):up();
      origin.send(reply);
-   elseif slot_type ~= "delete" then
+   elseif slot_type == "delete" then
      -- validate
      local fileurl = request:get_child_text("fileurl");
      if not fileurl then
