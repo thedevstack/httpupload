@@ -145,7 +145,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
         return true;
      end
      -- build the body
-     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
+     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
      -- the request
      local respbody, statuscode = http.request(external_url, reqbody);
      respbody = string.gsub(respbody, "\\/", "/")
