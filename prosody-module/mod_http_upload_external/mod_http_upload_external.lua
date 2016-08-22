@@ -107,6 +107,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
               end
            elseif statuscode == 403 and errobj["msg"] ~= nil then
               origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg));
+              return true;
            else
               origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "msg or err_code not found"));
               return true;
@@ -172,6 +173,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
               end
            elseif statuscode == 403 and errobj["msg"] ~= nil then
               origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg));
+              return true;
            else
               origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "msg or err_code not found"));
               return true;
