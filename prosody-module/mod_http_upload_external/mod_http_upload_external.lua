@@ -75,6 +75,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      -- check the response
      if statuscode == 500 then
         origin.send(st.error_reply(stanza, "cancel", "service-unavailable", respbody));
+        return true;
      elseif statuscode == 406 or statuscode == 400 or statuscode == 403 then
         local errobj, pos, err = json.decode(respbody);
         if err then
@@ -152,6 +153,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      -- check the response
      if statuscode == 500 then
         origin.send(st.error_reply(stanza, "cancel", "service-unavailable", respbody));
+        return true;
      elseif statuscode == 406 or statuscode == 400 or statuscode == 403 then
         local errobj, pos, err = json.decode(respbody);
         if err then
