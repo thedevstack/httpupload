@@ -67,7 +67,7 @@ switch ($method) {
     
     // Check if xmppServerKey is allowed to request slots
     if (false === checkXmppServerKey($config['valid_xmpp_server_keys'], $xmppServerKey)) {
-      sendHttpReturnCodeAndJson(403, 'Server is not allowed to request an upload slot');
+      sendHttpReturnCodeAndJson(403, 'Server is not allowed to request an '.$slotType.' slot');
     }
     
     switch ($slotType) {
