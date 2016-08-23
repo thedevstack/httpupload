@@ -244,6 +244,7 @@ function sendHttpReturnCodeAndJson($code, $data) {
   if (!is_array($data)) {
     $data = ['msg' => $data];
   }
+  header('Content-Type: application/json');
   sendHttpReturnCodeAndMessage($code, json_encode($data));
 }
 
