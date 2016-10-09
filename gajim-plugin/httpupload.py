@@ -64,6 +64,7 @@ except Exception as e:
     log.info('Decryption/Encryption disabled due to errors')
     encryption_available = False
 
+NS_HINTS = 'urn:xmpp:hints'
 # XEP-0363 (http://xmpp.org/extensions/xep-0363.html)
 NS_HTTPUPLOAD = 'urn:xmpp:http:upload'
 TAGSIZE = 16
@@ -73,6 +74,7 @@ iq_ids_to_callbacks = {}
 last_info_query = {}
 max_thumbnail_size = 2048
 max_thumbnail_dimension = 160
+httpuploadurls = {}
 
 
 class HttpuploadPlugin(GajimPlugin):
@@ -88,6 +90,8 @@ class HttpuploadPlugin(GajimPlugin):
                 self.handle_agent_info_received)
         self.events_handlers['raw-iq-received'] = (ged.PRECORE,
                 self.handle_iq_received)
+        self.events_handlers['stanza-message-outgoing'] = (ged.PRECORE,
+                self.handle_message_stanza_out)
         self.gui_extension_points = {
             'chat_control_base': (self.connect_with_chat_control,
                 self.disconnect_from_chat_control),
@@ -115,6 +119,20 @@ class HttpuploadPlugin(GajimPlugin):
             # update all buttons
             for base in self.controls:
                 self.update_button_state(base.chat_control)
+
+    @log_calls('HttpuploadPlugin')
+    def handle_message_stanza_out(self, event):
+        try:
+            global httpuploadurls
+            if not event.msg_iq.getTag('body'):
+                return
+            url = event.msg_iq.getBody()
+            if url in httpuploadurls:
+                # httpupload Hint
+                event.msg_iq.addChild('httpupload', namespace=NS_HINTS)
+                del httpuploadurls[url]
+        except Exception as e:
+            log.error(e)
 
     @log_calls('HttpuploadPlugin')
     def connect_with_chat_control(self, control):
@@ -458,7 +476,10 @@ class Base(object):
                         keyAndIv = '#' + binascii.hexlify(iv) + binascii.hexlify(key)
                         self.chat_control.send_message(message=get.getData() + keyAndIv, xhtml=None)
                     else:
-                        self.chat_control.send_message(message=get.getData(), xhtml=xhtml)
+                        global httpuploadurls
+                        url = get.getData()
+                        httpuploadurls[url] = True
+                        self.chat_control.send_message(message=url, xhtml=xhtml)
                     self.chat_control.msg_textview.grab_focus()
                 else:
                     progress_window.close_dialog()
