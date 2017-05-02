@@ -12,11 +12,13 @@
 -- configuration
 local external_url = module:get_option("http_upload_external_url");
 local xmpp_server_key = module:get_option("http_upload_external_server_key");
+local filetransfer_manager_ui_url = module:get_option("filetransfer_manager_ui_url");
 
 -- imports
 local st = require"util.stanza";
 local http = require"socket.http";
 local json = require"util.json";
+local dataform = require "util.dataforms".new;
 
 -- depends
 module:depends("disco");
@@ -25,6 +27,12 @@ module:depends("disco");
 local xmlns_http_upload = "urn:xmpp:filetransfer:http";
 
 module:add_feature(xmlns_http_upload);
+
+-- add additional disco info to advertise managing UI
+module:add_extension(dataform {
+        { name = "FORM_TYPE", type = "hidden", value = xmlns_http_upload },
+        { name = "filetransfer-manager-ui-url", type = "text-single" },
+}:form({ ["filetransfer-manager-ui-url"] = filetransfer_manager_ui_url }, "result"));
 
 -- hooks
 module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
