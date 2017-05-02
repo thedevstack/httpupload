@@ -43,7 +43,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
       return true;
    end
    local slot_type = request.attr.type;
-   module:log("debug", "incoming request is of type " .. slot_type);
+   if slot_type then
+      module:log("debug", "incoming request is of type " .. slot_type);
+   else
+      module:log("debug", "incoming request has no type - using default type 'upload'");
+   end
+   
    if not slot_type or slot_type == "upload" then
      -- validate
      local filename = request:get_child_text("filename");
@@ -67,7 +72,10 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
 
      -- the request
      local respbody, statuscode = http.request(external_url, reqbody);
-     respbody = string.gsub(respbody, "\\/", "/")
+     -- respbody is nil in case the server is not reachable
+     if respbody ~= nil then
+        respbody = string.gsub(respbody, "\\/", "/");
+     end
 
      local get_url = nil;
      local put_url = nil;
@@ -127,9 +135,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
               return true;
            end
         end
-     else
+     elseif respbody ~= nil then
         origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
         return true;
+     else
+        -- http file service not reachable
+        origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode));
      end
 
      local reply = st.reply(stanza);
@@ -148,7 +159,10 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
      -- the request
      local respbody, statuscode = http.request(external_url, reqbody);
-     respbody = string.gsub(respbody, "\\/", "/")
+     -- respbody is nil in case the server is not reachable
+     if respbody ~= nil then
+        respbody = string.gsub(respbody, "\\/", "/");
+     end
      
      local delete_token = nil;
      -- check the response
@@ -192,9 +206,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
               return true;
            end
         end
-     else
+     elseif respbody ~= nil then
         origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
         return true;
+     else
+        -- http file service not reachable
+        origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode));
      end
 
      local reply = st.reply(stanza);
