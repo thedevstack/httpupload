@@ -12,11 +12,13 @@
 -- configuration
 local external_url = module:get_option("http_upload_external_url");
 local xmpp_server_key = module:get_option("http_upload_external_server_key");
+local filetransfer_manager_ui_url = module:get_option("filetransfer_manager_ui_url");
 
 -- imports
 local st = require"util.stanza";
 local http = require"socket.http";
 local json = require"util.json";
+local dataform = require "util.dataforms".new;
 
 -- depends
 module:depends("disco");
@@ -25,6 +27,12 @@ module:depends("disco");
 local xmlns_http_upload = "urn:xmpp:filetransfer:http";
 
 module:add_feature(xmlns_http_upload);
+
+-- add additional disco info to advertise managing UI
+module:add_extension(dataform {
+        { name = "FORM_TYPE", type = "hidden", value = xmlns_http_upload },
+        { name = "filetransfer-manager-ui-url", type = "text-single" },
+}:form({ ["filetransfer-manager-ui-url"] = filetransfer_manager_ui_url }, "result"));
 
 -- hooks
 module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
@@ -43,7 +51,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
       return true;
    end
    local slot_type = request.attr.type;
-   module:log("debug", "incoming request is of type " .. slot_type);
+   if slot_type then
+      module:log("debug", "incoming request is of type " .. slot_type);
+   else
+      module:log("debug", "incoming request has no type - using default type 'upload'");
+   end
+   
    if not slot_type or slot_type == "upload" then
      -- validate
      local filename = request:get_child_text("filename");
@@ -67,7 +80,10 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
 
      -- the request
      local respbody, statuscode = http.request(external_url, reqbody);
-     respbody = string.gsub(respbody, "\\/", "/")
+     -- respbody is nil in case the server is not reachable
+     if respbody ~= nil then
+        respbody = string.gsub(respbody, "\\/", "/");
+     end
 
      local get_url = nil;
      local put_url = nil;
@@ -87,19 +103,19 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
                  origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg));
                  return true;
               elseif errobj.err_code == 2 then
-                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg,
-                    st.stanza("file-too-large", {xmlns=xmlns_http_upload})
-                       :tag("max-size"):text(errobj.parameters.max_file_size)));
+                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
+                       :tag("file-too-large", {xmlns=xmlns_http_upload})
+                       :tag("max-size"):text(errobj.parameters.max_file_size));
                  return true;
               elseif errobj.err_code == 3 then
-                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg,
-                    st.stanza("invalid-character", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.invalid_character)));
+                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
+                       :tag("invalid-character", {xmlns=xmlns_http_upload})
+                       :text(errobj.parameters.invalid_character));
                  return true;
               elseif errobj.err_code == 4 then
-                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg,
-                    st.stanza("missing-parameter", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.missing_parameter)));
+                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
+                       :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                       :text(errobj.parameters.missing_parameter));
                  return true;
               else
                  origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
@@ -127,9 +143,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
               return true;
            end
         end
-     else
+     elseif respbody ~= nil then
         origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
         return true;
+     else
+        -- http file service not reachable
+        origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode));
      end
 
      local reply = st.reply(stanza);
@@ -148,7 +167,10 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
      -- the request
      local respbody, statuscode = http.request(external_url, reqbody);
-     respbody = string.gsub(respbody, "\\/", "/")
+     -- respbody is nil in case the server is not reachable
+     if respbody ~= nil then
+        respbody = string.gsub(respbody, "\\/", "/");
+     end
      
      local delete_token = nil;
      -- check the response
@@ -163,9 +185,9 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
         else
            if errobj["err_code"] ~= nil and errobj["msg"] ~= nil then
               if errobj.err_code == 4 then
-                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg,
-                    st.stanza("missing-parameter", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.missing_parameter)));
+                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
+                       :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                       :text(errobj.parameters.missing_parameter));
                  return true;
               else
                  origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
@@ -192,9 +214,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
               return true;
            end
         end
-     else
+     elseif respbody ~= nil then
         origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
         return true;
+     else
+        -- http file service not reachable
+        origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode));
      end
 
      local reply = st.reply(stanza);
