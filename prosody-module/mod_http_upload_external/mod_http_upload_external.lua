@@ -103,19 +103,19 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
                  origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg));
                  return true;
               elseif errobj.err_code == 2 then
-                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg,
-                    st.stanza("file-too-large", {xmlns=xmlns_http_upload})
-                       :tag("max-size"):text(errobj.parameters.max_file_size)));
+                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
+                       :tag("file-too-large", {xmlns=xmlns_http_upload})
+                       :tag("max-size"):text(errobj.parameters.max_file_size));
                  return true;
               elseif errobj.err_code == 3 then
-                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg,
-                    st.stanza("invalid-character", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.invalid_character)));
+                 origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
+                       :tag("invalid-character", {xmlns=xmlns_http_upload})
+                       :text(errobj.parameters.invalid_character));
                  return true;
               elseif errobj.err_code == 4 then
-                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg,
-                    st.stanza("missing-parameter", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.missing_parameter)));
+                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
+                       :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                       :text(errobj.parameters.missing_parameter));
                  return true;
               else
                  origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
@@ -185,9 +185,9 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
         else
            if errobj["err_code"] ~= nil and errobj["msg"] ~= nil then
               if errobj.err_code == 4 then
-                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg,
-                    st.stanza("missing-parameter", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.missing_parameter)));
+                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
+                       :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                       :text(errobj.parameters.missing_parameter));
                  return true;
               else
                  origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
