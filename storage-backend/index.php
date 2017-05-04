@@ -11,7 +11,7 @@
  *   size
  *   content_type
  *   user_jid
- *   receipient_jid
+ *   recipient_jid
  * 403: In case the XMPP Server Key is not valid
  * 406:
  *   File is empty (error code: 1)
@@ -50,6 +50,7 @@
 include_once(__DIR__.'/lib/functions.common.inc.php');
 include_once(__DIR__.'/lib/functions.http.inc.php');
 include_once(__DIR__.'/lib/functions.filetransfer.inc.php');
+include_once(__DIR__.'/lib/xmpp.util.inc.php');
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Load configuration
@@ -74,6 +75,10 @@ switch ($method) {
     }
     
     switch ($slotType) {
+      case 'list':
+        $slots = readSlots($userJid);
+        $result = ['list' => $slots];
+        break;
       case 'delete':
         // Check if all parameters needed for an delete are present - return 400 (bad request) if a parameter is missing / empty
         $fileURL = getMandatoryPostParameter('file_url');
@@ -104,7 +109,7 @@ switch ($method) {
         $filename = rawurlencode(getMandatoryPostParameter('filename'));
         $filesize = getMandatoryPostParameter('size');
         $mimeType = getOptionalPostParameter('content_type');
-        $receipientJid = getMandatoryPostParameter('receipient_jid');
+        $recipientJid = getMandatoryPostParameter('recipient_jid');
         
         // check file name - return 406 (not acceptable) if file contains invalid characters
         foreach ($config['invalid_characters_in_filename'] as $invalidCharacter) {
@@ -122,7 +127,7 @@ switch ($method) {
         }
         // generate slot uuid, register slot uuid and expected file size and expected mime type
         $slotUUID = generate_uuid();
-        registerSlot($slotUUID, $filename, $filesize, $mimeType, $userJid, $receipientJid, $config);
+        registerSlot($slotUUID, $filename, $filesize, $mimeType, $userJid, $recipientJid, $config);
         if (!mkdir(getUploadFilePath($slotUUID, $config))) {
           sendHttpReturnCodeAndJson(500, "Could not create directory for upload.");
         }
