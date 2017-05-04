@@ -548,6 +548,7 @@ class Base(object):
             name="content-type",
         )
         content_type.addData(mime_type)
+        request.setAttr("recipient", self.chat_control.contact.jid)
 
         # send slot request and register callback
         log.debug("sending httpupload slot request iq...")
