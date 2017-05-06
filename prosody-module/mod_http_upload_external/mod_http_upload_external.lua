@@ -19,6 +19,7 @@ local st = require"util.stanza";
 local http = require"socket.http";
 local json = require"util.json";
 local dataform = require "util.dataforms".new;
+local ltn12 = require"ltn12";
 
 -- depends
 module:depends("disco");
@@ -113,6 +114,72 @@ local function listfiles(origin, orig_from, stanza, request)
   end
   origin.send(reply);
   return true;
+end
+
+local function deletefile(origin, orig_from, stanza, request)
+  -- validate
+  local fileurl = request:get_child_text("fileurl");
+  if not fileurl then
+     origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid fileurl"));
+     return true;
+  end
+  -- build the body
+  --local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
+  -- the request
+  local resp = {};
+  local client, statuscode = http.request{url=fileurl,
+    sink=ltn12.sink.table(resp),
+    method="DELETE",
+    headers={["X-XMPP-SERVER-KEY"]=xmpp_server_key,
+    ["X-USER-JID"]=orig_from}};
+
+  local respbody = table.concat(resp);
+  -- respbody is nil in case the server is not reachable
+  if respbody ~= nil then
+     respbody = string.gsub(respbody, "\\/", "/");
+  end
+
+  -- check the response
+  if statuscode == 500 then
+     origin.send(st.error_reply(stanza, "cancel", "service-unavailable", respbody));
+     return true;
+  elseif statuscode == 406 or statuscode == 400 or statuscode == 403 then
+     local errobj, pos, err = json.decode(respbody);
+     if err then
+        origin.send(st.error_reply(stanza, "wait", "internal-server-error", err));
+        return true;
+     else
+        if statuscode == 403 and errobj["msg"] ~= nil then
+           origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg));
+           return true;
+        elseif errobj["err_code"] ~= nil and errobj["msg"] ~= nil then
+           if errobj.err_code == 4 then
+              origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
+                    :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                    :text(errobj.parameters.missing_parameter));
+              return true;
+           else
+              origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
+              return true;
+           end
+        else
+           origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "msg or err_code not found"));
+           return true;
+        end
+     end
+  elseif statuscode == 204 then
+     local reply = st.reply(stanza);
+     reply:tag("deleted", { xmlns = xmlns_http_upload });
+     origin.send(reply);
+     return true;
+  elseif respbody ~= nil then
+     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
+     return true;
+  else
+     -- http file service not reachable
+     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode));
+     return true;
+  end
 end
 
 -- hooks
@@ -244,81 +311,13 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      reply:tag("get"):text(get_url):up();
      reply:tag("put"):text(put_url):up();
      origin.send(reply);
+     return true;
    elseif slot_type == "delete" then
-     -- validate
-     local fileurl = request:get_child_text("fileurl");
-     if not fileurl then
-        origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid fileurl"));
-        return true;
-     end
-     -- build the body
-     local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
-     -- the request
-     local respbody, statuscode = http.request(external_url, reqbody);
-     -- respbody is nil in case the server is not reachable
-     if respbody ~= nil then
-        respbody = string.gsub(respbody, "\\/", "/");
-     end
-     
-     local delete_token = nil;
-     -- check the response
-     if statuscode == 500 then
-        origin.send(st.error_reply(stanza, "cancel", "service-unavailable", respbody));
-        return true;
-     elseif statuscode == 406 or statuscode == 400 or statuscode == 403 then
-        local errobj, pos, err = json.decode(respbody);
-        if err then
-           origin.send(st.error_reply(stanza, "wait", "internal-server-error", err));
-           return true;
-        else
-           if errobj["err_code"] ~= nil and errobj["msg"] ~= nil then
-              if errobj.err_code == 4 then
-                 origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
-                       :tag("missing-parameter", {xmlns=xmlns_http_upload})
-                       :text(errobj.parameters.missing_parameter));
-                 return true;
-              else
-                 origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "unknown err_code"));
-                 return true;
-              end
-           elseif statuscode == 403 and errobj["msg"] ~= nil then
-              origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg));
-              return true;
-           else
-              origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "msg or err_code not found"));
-              return true;
-           end
-        end
-     elseif statuscode == 200 then
-        local respobj, pos, err = json.decode(respbody);
-        if err then
-           origin.send(st.error_reply(stanza, "wait", "internal-server-error", err));
-           return true;
-        else
-           if respobj["deletetoken"] ~= nil then
-              delete_token = respobj.deletetoken;
-           else
-              origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "deletetoken not found"));
-              return true;
-           end
-        end
-     elseif respbody ~= nil then
-        origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
-        return true;
-     else
-        -- http file service not reachable
-        origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode));
-     end
-
-     local reply = st.reply(stanza);
-     reply:tag("slot", { xmlns = xmlns_http_upload });
-     reply:tag("deletetoken"):text(delete_token):up();
-     origin.send(reply);
+     return deletefile(origin, orig_from, stanza, request);
    elseif slot_type == "list" then
      return listfiles(origin, orig_from, stanza, request);
    else
     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
     return true;
    end
-   return true;
 end);
