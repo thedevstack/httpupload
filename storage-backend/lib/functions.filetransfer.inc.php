@@ -36,7 +36,7 @@ function readSlots($jid)  {
                 $slotUUID = $entry;
                 $params = loadSlotParameters($slotUUID, $config);
                 $senderBareJid = getBareJid($params['user_jid']);
-                $recipientBareJid = (array_key_exists('receipient_jid', $params)) ? getBareJid($params['receipient_jid']) : '';
+                $recipientBareJid = (array_key_exists('recipient_jid', $params)) ? getBareJid($params['recipient_jid']) : '';
                 if ($senderBareJid == $jid || $recipientBareJid == $jid) {
                     $filePath = getUploadFilePath($slotUUID, $config, $params['filename']);
                     $file = [];
@@ -52,8 +52,8 @@ function readSlots($jid)  {
                     $file['fileinfo']['content_type'] = $params['content_type'];
                     $file['sender_jid'] = $senderBareJid;
                     $file['recipient_jid'] = $recipientBareJid;
-                    if (null == $file['receipient_jid']) {
-                      $file['receipient_jid'] = "";
+                    if (null == $file['recipient_jid']) {
+                      $file['recipient_jid'] = "";
                     }
                     $slots[] = $file;
                 }
