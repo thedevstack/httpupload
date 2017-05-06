@@ -29,11 +29,13 @@ local xmlns_http_upload = "urn:xmpp:filetransfer:http";
 
 module:add_feature(xmlns_http_upload);
 
--- add additional disco info to advertise managing UI
-module:add_extension(dataform {
+if filetransfer_manager_ui_url then
+   -- add additional disco info to advertise managing UI
+   module:add_extension(dataform {
         { name = "FORM_TYPE", type = "hidden", value = xmlns_http_upload },
         { name = "filetransfer-manager-ui-url", type = "text-single" },
-}:form({ ["filetransfer-manager-ui-url"] = filetransfer_manager_ui_url }, "result"));
+   }:form({ ["filetransfer-manager-ui-url"] = filetransfer_manager_ui_url }, "result"));
+end
 
 local function listfiles(origin, orig_from, stanza, request)
    -- build the body
