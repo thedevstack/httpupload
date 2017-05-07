@@ -1,1 +1,4 @@
 Options -Indexes
+<Files *>
+    SetHandler default-handler
+</Files>
