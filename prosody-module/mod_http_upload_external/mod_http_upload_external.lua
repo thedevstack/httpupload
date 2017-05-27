@@ -121,7 +121,7 @@ end
 local function deletefile(origin, orig_from, stanza, request)
   -- validate
   local fileurl = request:get_child_text("fileurl");
-  if not fileurl then
+  if not fileurl or fileurl == '' then
      origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid fileurl"));
      return true;
   end
@@ -169,7 +169,7 @@ local function deletefile(origin, orig_from, stanza, request)
            return true;
         end
      end
-  elseif statuscode == 204 then
+  elseif statuscode == 204 or statuscode == 404 then
      local reply = st.reply(stanza);
      reply:tag("deleted", { xmlns = xmlns_http_upload });
      origin.send(reply);
