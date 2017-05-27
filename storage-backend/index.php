@@ -164,9 +164,9 @@ switch ($method) {
       sendHttpReturnCodeAndJson(403, 'Server is not allowed to delete a file');
     }
 
+    $slotParameters = loadSlotParameters($slotUUID, $config);
     if ($config['delete_only_by_creator']) {
-      $slotParameters = loadSlotParameters($slotUUID, $config);
-      if ($slotParameters['user_jid'] != $userJid) {
+      if (getBareJid($slotParameters['user_jid']) != getBareJid($userJid)) {
         sendHttpReturnCodeAndJson(403, "Deletion of that file is only allowed by the user created it.");
       }
     }
@@ -174,7 +174,7 @@ switch ($method) {
     if (!slotExists($slotUUID, $config)) {
       sendHttpReturnCodeAndJson(403, "The slot does not exist.");
     }
-    $slotParameters = loadSlotParameters($slotUUID, $config);
+    
     if (!checkFilenameParameter($filename, $slotParameters)) {
       sendHttpReturnCodeAndJson(403, "Filename to delete differs from requested slot filename.");
     }
