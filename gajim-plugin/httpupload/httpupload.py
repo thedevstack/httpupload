@@ -65,8 +65,7 @@ except Exception as e:
     encryption_available = False
 
 NS_HINTS = 'urn:xmpp:hints'
-# XEP-0363 (http://xmpp.org/extensions/xep-0363.html)
-NS_HTTPUPLOAD = 'urn:xmpp:http:upload'
+NS_FILETRANSFER_HTTP = 'urn:xmpp:filetransfer:http'
 TAGSIZE = 16
 
 jid_to_servers = {}
@@ -76,6 +75,8 @@ max_thumbnail_size = 2048
 max_thumbnail_dimension = 160
 httpuploadurls = {}
 
+class FileInfo():
+    pass
 
 class HttpuploadPlugin(GajimPlugin):
 
@@ -112,7 +113,7 @@ class HttpuploadPlugin(GajimPlugin):
 
     def handle_agent_info_received(self, event):
         global jid_to_servers
-        if NS_HTTPUPLOAD in event.features and gajim.jid_is_transport(event.jid):
+        if NS_FILETRANSFER_HTTP in event.features and gajim.jid_is_transport(event.jid):
             own_jid = gajim.get_jid_without_resource(str(event.stanza.getTo()))
             jid_to_servers[own_jid] = event.jid        # map own jid to upload component's jid
             log.info(own_jid + " can do http uploads via component " + event.jid)
@@ -130,6 +131,20 @@ class HttpuploadPlugin(GajimPlugin):
             if url in httpuploadurls:
                 # httpupload Hint
                 event.msg_iq.addChild('httpupload', namespace=NS_HINTS)
+                fileInfo = httpuploadurls[url]
+                fileInfoNode = event.msg_iq.addChild('file-info', namespace=NS_FILETRANSFER_HTTP)
+                filename = fileInfoNode.addChild(
+                    name='filename',
+                )
+                filename.addData(fileInfo.filename)
+                size = fileInfoNode.addChild(
+                    name='size',
+                )
+                size.addData(fileInfo.filesize)
+                content_type = fileInfoNode.addChild(
+                    name='content-type',
+                )
+                content_type.addData(fileInfo.mimeType)
                 del httpuploadurls[url]
         except Exception as e:
             log.error(e)
@@ -353,6 +368,12 @@ class Base(object):
         log.info("Detected MIME Type of file: " + str(mime_type))
         progress_messages = Queue(8)
         progress_window = ProgressWindow(_('HTTP Upload'), _('Requesting HTTP Upload Slot...'), progress_messages, self.plugin)
+        
+        fileInfo = FileInfo()
+        fileInfo.filename = os.path.basename(path_to_file)
+        fileInfo.filesize = filesize
+        fileInfo.mimeType = mime_type
+        
         def upload_file(stanza):
             slot = stanza.getTag("slot")
             if not slot:
@@ -478,7 +499,7 @@ class Base(object):
                     else:
                         global httpuploadurls
                         url = get.getData()
-                        httpuploadurls[url] = True
+                        httpuploadurls[url] = fileInfo
                         self.chat_control.send_message(message=url, xhtml=xhtml)
                     self.chat_control.msg_textview.grab_focus()
                 else:
@@ -534,20 +555,20 @@ class Base(object):
         iq.setID(id_)
         request = iq.addChild(
             name="request",
-            namespace=NS_HTTPUPLOAD
+            namespace=NS_FILETRANSFER_HTTP
         )
         filename = request.addChild(
             name="filename",
         )
-        filename.addData(os.path.basename(path_to_file))
+        filename.addData(fileInfo.filename)
         size = request.addChild(
             name="size",
         )
-        size.addData(filesize)
+        size.addData(fileInfo.filesize)
         content_type = request.addChild(
             name="content-type",
         )
-        content_type.addData(mime_type)
+        content_type.addData(fileInfo.mimeType)
         request.setAttr("recipient", self.chat_control.contact.jid)
 
         # send slot request and register callback
