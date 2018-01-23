@@ -16,8 +16,49 @@ function getUploadFilePath($slotUUID, $config, $filename = NULL) {
 }
 
 function loadSlotParameters($slotUUID, $config) {
-  $slotParameters = require(getSlotFilePath($slotUUID, $config));
+  $slotFilePath = getSlotFilePath($slotUUID, $config);
+  $slotParameters = require($slotFilePath);
   $slotParameters['filename'] = $slotParameters['filename'];
+  $slotParameters['creation_time'] = filemtime($slotFilePath);
   
   return $slotParameters;
+}
+
+function readSlots($jid)  {
+    global $config;
+
+    $jid = getBareJid($jid);
+    $slots = array();
+
+    if ($handle = opendir($config['slot_registry_dir'])) {
+        while (false !== ($entry = readdir($handle))) {
+            if ($entry != "." && $entry != ".." && $entry != ".htaccess") {
+                $slotUUID = $entry;
+                $params = loadSlotParameters($slotUUID, $config);
+                $senderBareJid = getBareJid($params['user_jid']);
+                $recipientBareJid = (array_key_exists('recipient_jid', $params)) ? getBareJid($params['recipient_jid']) : '';
+                if ($senderBareJid == $jid || $recipientBareJid == $jid) {
+                    $filePath = getUploadFilePath($slotUUID, $config, $params['filename']);
+                    $file = [];
+                    $fileExists = file_exists($filePath);
+                    $file['url'] = "";
+                    $file['sent_time'] = $params['creation_time'];
+                    if ($fileExists) {
+                        $file['url'] = $config['base_url_get'].$slotUUID.'/'.$params['filename'];
+                    }
+                    $file['fileinfo'] = [];
+                    $file['fileinfo']['filename'] = $params['filename'];
+                    $file['fileinfo']['filesize'] = $params['filesize'];
+                    $file['fileinfo']['content_type'] = $params['content_type'];
+                    $file['sender_jid'] = $senderBareJid;
+                    $file['recipient_jid'] = $recipientBareJid;
+                    if (null == $file['recipient_jid']) {
+                      $file['recipient_jid'] = "";
+                    }
+                    $slots[] = $file;
+                }
+            }
+        }
+    }
+    return $slots;
 }
