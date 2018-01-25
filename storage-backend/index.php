@@ -87,7 +87,7 @@ switch ($method) {
         $filename = rawurlencode(getMandatoryPostParameter('filename'));
         $filesize = getMandatoryPostParameter('size');
         $mimeType = getOptionalPostParameter('content_type');
-        $recipientJid = getMandatoryPostParameter('recipient_jid');
+        $recipientJid = getOptionalPostParameter('recipient_jid', 'Unknown'); // Optional for backwards compatibility (xep-0363 v0.1)
         
         // check file name - return 406 (not acceptable) if file contains invalid characters
         foreach ($config['invalid_characters_in_filename'] as $invalidCharacter) {
