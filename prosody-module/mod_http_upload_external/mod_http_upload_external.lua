@@ -17,7 +17,7 @@ local filetransfer_manager_ui_url = module:get_option("filetransfer_manager_ui_u
 -- imports
 require"https";
 local st = require"util.stanza";
-local http = (string.len(url) >= 5 and string.sub(url,1,5) == "https") and require"ssl.https" or require"socket.http";
+local http = (string.len(external_url) >= 5 and string.sub(external_url,1,5) == "https") and require"ssl.https" or require"socket.http";
 local json = require"util.json";
 local dataform = require "util.dataforms".new;
 local ltn12 = require"ltn12";
