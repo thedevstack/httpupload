@@ -27,6 +27,10 @@ module:depends("disco");
 -- namespace
 local xmlns_http_upload = "urn:xmpp:filetransfer:http";
 
+-- versions
+spec_version = "v0.3";
+impl_version = "v0.3-dev";
+
 module:add_feature(xmlns_http_upload);
 
 if filetransfer_manager_ui_url then
@@ -318,6 +322,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      return deletefile(origin, orig_from, stanza, request);
    elseif slot_type == "list" then
      return listfiles(origin, orig_from, stanza, request);
+   elseif slot_type == "version" then
+     local reply = st.reply(stanza);
+     reply:tag("version", { xmlns = xmlns_http_upload });
+     reply:tag("xmpp-fileservice-module", { spec = spec_version, implementation = impl_version }):up();
+     origin.send(reply);
+     return true;
    else
     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
     return true;
