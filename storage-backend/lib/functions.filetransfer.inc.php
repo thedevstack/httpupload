@@ -40,7 +40,7 @@ function readSlots($jid)  {
                 if ($senderBareJid == $jid || $recipientBareJid == $jid) {
                     $filePath = getUploadFilePath($slotUUID, $config, $params['filename']);
                     $file = [];
-                    $fileExists = file_exists($filePath);
+                    $fileExists = file_exists(rawurldecode($filePath));
                     $file['url'] = "";
                     $file['sent_time'] = $params['creation_time'];
                     if ($fileExists) {
