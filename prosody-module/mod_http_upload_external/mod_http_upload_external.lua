@@ -188,31 +188,8 @@ local function deletefile(origin, orig_from, stanza, request)
   end
 end
 
--- hooks
-module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
-   local stanza, origin = event.stanza, event.origin;
-   local orig_from = stanza.attr.from;
-   local request = stanza.tags[1];
-   -- local clients only
-   if origin.type ~= "c2s" then
-      origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
-      return true;
-   end
-   -- check configuration
-   if not external_url or not xmpp_server_key then
-      module:log("debug", "missing configuration options: http_upload_external_url and/or http_upload_external_server_key");
-      origin.send(st.error_reply(stanza, "cancel", "internal-server-error"));
-      return true;
-   end
-   local slot_type = request.attr.type;
-   if slot_type then
-      module:log("debug", "incoming request is of type " .. slot_type);
-   else
-      module:log("debug", "incoming request has no type - using default type 'upload'");
-   end
-   
-   if not slot_type or slot_type == "upload" then
-     -- validate
+local function create_upload_slot(origin, orig_from, stanza, request)
+   -- validate
      local filename = request:get_child_text("filename");
      if not filename then
         origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid filename"));
@@ -318,6 +295,33 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      reply:tag("put"):text(put_url):up();
      origin.send(reply);
      return true;
+end
+
+-- hooks
+module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
+   local stanza, origin = event.stanza, event.origin;
+   local orig_from = stanza.attr.from;
+   local request = stanza.tags[1];
+   -- local clients only
+   if origin.type ~= "c2s" then
+      origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
+      return true;
+   end
+   -- check configuration
+   if not external_url or not xmpp_server_key then
+      module:log("debug", "missing configuration options: http_upload_external_url and/or http_upload_external_server_key");
+      origin.send(st.error_reply(stanza, "cancel", "internal-server-error"));
+      return true;
+   end
+   local slot_type = request.attr.type;
+   if slot_type then
+      module:log("debug", "incoming request is of type " .. slot_type);
+   else
+      module:log("debug", "incoming request has no type - using default type 'upload'");
+   end
+   
+   if not slot_type or slot_type == "upload" then
+     return create_upload_slot(origin, orig_from, stanza, request);
    elseif slot_type == "delete" then
      return deletefile(origin, orig_from, stanza, request);
    elseif slot_type == "list" then
