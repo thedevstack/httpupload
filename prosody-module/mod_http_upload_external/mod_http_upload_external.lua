@@ -189,6 +189,14 @@ local function deletefile(origin, orig_from, stanza, request)
   end
 end
 
+local function version(origin, stanza)
+  local reply = st.reply(stanza);
+  reply:tag("version", { xmlns = xmlns_http_upload });
+  reply:tag("xmpp-fileservice-module", { spec = spec_version, implementation = impl_version }):up();
+  origin.send(reply);
+  return true;
+end
+
 local function create_upload_slot(origin, orig_from, stanza, request)
    -- validate
      local filename = request:get_child_text("filename");
@@ -328,11 +336,7 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    elseif slot_type == "list" then
      return listfiles(origin, orig_from, stanza, request);
    elseif slot_type == "version" then
-     local reply = st.reply(stanza);
-     reply:tag("version", { xmlns = xmlns_http_upload });
-     reply:tag("xmpp-fileservice-module", { spec = spec_version, implementation = impl_version }):up();
-     origin.send(reply);
-     return true;
+     return version(origin, stanza);
    else
     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
     return true;
