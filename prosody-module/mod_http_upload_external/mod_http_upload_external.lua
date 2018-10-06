@@ -26,18 +26,20 @@ local ltn12 = require"ltn12";
 module:depends("disco");
 
 -- namespace
-local xmlns_http_upload = "urn:xmpp:filetransfer:http";
+local xmlns_filetransfer_http = "urn:xmpp:filetransfer:http";
+local xmlns_http_upload = "urn:xmpp:http:upload";
 
 -- versions
 spec_version = "v0.3";
 impl_version = "v0.3-dev";
 
+module:add_feature(xmlns_filetransfer_http);
 module:add_feature(xmlns_http_upload);
 
 if filetransfer_manager_ui_url then
    -- add additional disco info to advertise managing UI
    module:add_extension(dataform {
-        { name = "FORM_TYPE", type = "hidden", value = xmlns_http_upload },
+        { name = "FORM_TYPE", type = "hidden", value = xmlns_filetransfer_http },
         { name = "filetransfer-manager-ui-url", type = "text-single" },
    }:form({ ["filetransfer-manager-ui-url"] = filetransfer_manager_ui_url }, "result"));
 end
@@ -90,7 +92,7 @@ local function listfiles(origin, orig_from, stanza, request)
   
   local addedfiles = 0;
   local reply = st.reply(stanza);
-  reply:tag("list", {xmlns=xmlns_http_upload});
+  reply:tag("list", {xmlns=xmlns_filetransfer_http});
   if filelistempty == false then
     for i, file in ipairs(list) do
       local url = file.url;
@@ -162,7 +164,7 @@ local function deletefile(origin, orig_from, stanza, request)
         elseif errobj["err_code"] ~= nil and errobj["msg"] ~= nil then
            if errobj.err_code == 4 then
               origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
-                    :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                    :tag("missing-parameter", {xmlns=xmlns_filetransfer_http})
                     :text(errobj.parameters.missing_parameter));
               return true;
            else
@@ -176,7 +178,7 @@ local function deletefile(origin, orig_from, stanza, request)
      end
   elseif statuscode == 204 or statuscode == 404 then
      local reply = st.reply(stanza);
-     reply:tag("deleted", { xmlns = xmlns_http_upload });
+     reply:tag("deleted", { xmlns = xmlns_filetransfer_http });
      origin.send(reply);
      return true;
   elseif respbody ~= nil then
@@ -191,13 +193,13 @@ end
 
 local function version(origin, stanza)
   local reply = st.reply(stanza);
-  reply:tag("version", { xmlns = xmlns_http_upload });
+  reply:tag("version", { xmlns = xmlns_filetransfer_http });
   reply:tag("xmpp-fileservice-module", { spec = spec_version, implementation = impl_version }):up();
   origin.send(reply);
   return true;
 end
 
-local function create_upload_slot(origin, orig_from, stanza, request)
+local function create_upload_slot(origin, orig_from, stanza, request, namespace, recipient)
    -- validate
      local filename = request:get_child_text("filename");
      if not filename then
@@ -208,12 +210,6 @@ local function create_upload_slot(origin, orig_from, stanza, request)
      if not filesize then
         origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid file size"));
         return true;
-     end
-
-     local recipient = request.attr.recipient;
-     if not recipient then
-       origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid recipient"));
-       return true;
      end
 
      local content_type = request:get_child_text("content-type");
@@ -250,17 +246,17 @@ local function create_upload_slot(origin, orig_from, stanza, request)
                  return true;
               elseif errobj.err_code == 2 then
                  origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
-                       :tag("file-too-large", {xmlns=xmlns_http_upload})
+                       :tag("file-too-large", {xmlns=namespace})
                        :tag("max-size"):text(errobj.parameters.max_file_size));
                  return true;
               elseif errobj.err_code == 3 then
                  origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
-                       :tag("invalid-character", {xmlns=xmlns_http_upload})
+                       :tag("invalid-character", {xmlns=namespace})
                        :text(errobj.parameters.invalid_character));
                  return true;
               elseif errobj.err_code == 4 then
                  origin.send(st.error_reply(stanza, "cancel", "internal-server-error", errobj.msg)
-                       :tag("missing-parameter", {xmlns=xmlns_http_upload})
+                       :tag("missing-parameter", {xmlns=namespace})
                        :text(errobj.parameters.missing_parameter));
                  return true;
               else
@@ -299,7 +295,7 @@ local function create_upload_slot(origin, orig_from, stanza, request)
      end
 
      local reply = st.reply(stanza);
-     reply:tag("slot", { xmlns = xmlns_http_upload });
+     reply:tag("slot", { xmlns = namespace });
      reply:tag("get"):text(get_url):up();
      reply:tag("put"):text(put_url):up();
      origin.send(reply);
@@ -307,7 +303,7 @@ local function create_upload_slot(origin, orig_from, stanza, request)
 end
 
 -- hooks
-module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
+module:hook("iq/host/"..xmlns_filetransfer_http..":request", function (event)
    local stanza, origin = event.stanza, event.origin;
    local orig_from = stanza.attr.from;
    local request = stanza.tags[1];
@@ -330,7 +326,12 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    end
    
    if not slot_type or slot_type == "upload" then
-     return create_upload_slot(origin, orig_from, stanza, request);
+     local recipient = request.attr.recipient;
+     if not recipient then
+       origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid recipient"));
+       return true;
+     end
+     return create_upload_slot(origin, orig_from, stanza, request, xmlns_filetransfer_http, recipient);
    elseif slot_type == "delete" then
      return deletefile(origin, orig_from, stanza, request);
    elseif slot_type == "list" then
@@ -341,4 +342,29 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
     return true;
    end
+end);
+
+module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
+  local stanza, origin = event.stanza, event.origin;
+  local orig_from = stanza.attr.from;
+  local request = stanza.tags[1];
+  -- local clients only
+  if origin.type ~= "c2s" then
+     origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
+     return true;
+  end
+  -- check configuration
+  if not external_url or not xmpp_server_key then
+     module:log("debug", "missing configuration options: http_upload_external_url and/or http_upload_external_server_key");
+     origin.send(st.error_reply(stanza, "cancel", "internal-server-error"));
+     return true;
+  end
+  local slot_type = request.attr.type;
+  if slot_type then
+     module:log("debug", "incoming request is of type " .. slot_type);
+  else
+     module:log("debug", "incoming request has no type - using default type 'upload'");
+  end
+
+  return create_upload_slot(origin, orig_from, stanza, request, xmlns_http_upload, "Unknown");
 end);
