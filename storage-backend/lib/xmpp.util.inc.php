@@ -13,7 +13,7 @@ function getJidDomain($jid) {
     
     if ($slashIndex !== false) {
         if ($slashIndex > $atIndex) {// 'local@domain.foo/resource' and 'local@domain.foo/res@otherres' case
-            return substr($jid, $atIndex + 1, $slashIndex - $atIndex + 1);
+            return substr($jid, $atIndex + 1, $slashIndex - $atIndex - 1);
         } else {// 'domain.foo/res@otherres' case
             return substr($jid, 0, $slashIndex);
         }
