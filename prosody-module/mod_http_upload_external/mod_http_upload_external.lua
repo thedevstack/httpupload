@@ -195,6 +195,30 @@ local function version(origin, stanza)
   local reply = st.reply(stanza);
   reply:tag("version", { xmlns = xmlns_filetransfer_http });
   reply:tag("xmpp-fileservice-module", { spec = spec_version, implementation = impl_version }):up();
+  -- the request
+  local respbody, statuscode = http.request(external_url .. "?action=version");
+  -- respbody is nil in case the server is not reachable
+  if respbody ~= nil then
+     respbody = string.gsub(respbody, "\\/", "/");
+  end
+
+  local http_spec_version = nil;
+  local http_impl_version = nil;
+
+  -- check the response
+  if statuscode == 200 then
+    local respobj, pos, err = json.decode(respbody);
+    if err then
+        -- do nothing for the moment
+    else
+      if respobj["spec"] ~= nil and respobj["impl"] ~= nil then
+        http_spec_version = respobj.spec;
+        http_impl_version = respobj.impl;
+        reply:tag("http-fileservice-module", { spec = http_spec_version, implementation = http_impl_version }):up();
+      end
+    end
+  end
+
   origin.send(reply);
   return true;
 end
