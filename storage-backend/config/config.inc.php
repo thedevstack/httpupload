@@ -14,5 +14,7 @@ return [
   'delete_token_validity' => 5 * 60,
   // Flag to whether deletion is only allowed by creator or anybody
   'delete_only_by_creator' => true,
+  // The default count of items returned when a file list is requested
+  'list_default_limit' => 30,
 ];
 ?>

@@ -67,8 +67,8 @@ switch ($method) {
   case 'POST':
     // parse post parameters
     // check if all parameters are present - return 400 (bad request) if a parameter is missing / empty
-	$xmppServerKey = getMandatoryPostParameter('xmpp_server_key');
-	$userJid = getMandatoryPostParameter('user_jid');
+	$xmppServerKey = getMandatoryPost('xmpp_server_key');
+	$userJid = getMandatoryPost('user_jid');
 	$slotType = getOptionalPostParameter('slot_type', 'upload');
     
     // Check if xmppServerKey is allowed to request slots
@@ -78,14 +78,16 @@ switch ($method) {
     
     switch ($slotType) {
       case 'list':
-        $slots = readSlots($userJid);
-        $result = ['list' => $slots];
+        $limit = getOptionalPostParameter('limit', $config['list_default_limit']);
+        $offset = getOptionalPostParameter('offset', 0);
+        $files = listFiles($userJid, $limit, $offset);
+        $result = ['list' => $files];
         break;
       case 'upload':
       default:
         // Check if all parameters needed for an upload are present - return 400 (bad request) if a parameter is missing / empty
-        $filename = rawurlencode(getMandatoryPostParameter('filename'));
-        $filesize = getMandatoryPostParameter('size');
+        $filename = rawurlencode(getMandatoryPost('filename'));
+        $filesize = getMandatoryPost('size');
         $mimeType = getOptionalPostParameter('content_type');
         $recipientJid = getOptionalPostParameter('recipient_jid', 'Unknown'); // Optional for backwards compatibility (xep-0363 v0.1)
         
@@ -143,7 +145,8 @@ switch ($method) {
       sendHttpReturnCodeAndJson(403, "Uploaded file size differs from requested slot size.");
     }
     // check actual mime type with registered mime type
-    if (!is_null($slotParameters['content_type']) && !empty($slotParameters['content_type']) && mime_content_type($uploadFilePath) != $slotParameters['content_type']) {
+    $uploadedContentType = mime_content_type($uploadFilePath);
+    if (!is_null($slotParameters['content_type']) && !empty($slotParameters['content_type']) && $uploadedContentType != $slotParameters['content_type']) {
       unlink($uploadFilePath);
       sendHttpReturnCodeAndJson(403, "Uploaded file content type differs from requested slot content type.");
     }
@@ -193,6 +196,17 @@ switch ($method) {
       sendHttpReturnCodeAndJson(500, "Could not delete file.");
     }
     break;
+  case 'GET':
+    $actionParameter = getMandatoryGet('action');
+
+    switch ($actionParameter) {
+      case 'version':
+        echo json_encode(require_once(__DIR__.'/lib/version.inc.php'));
+      break;
+      default:
+        sendHttpReturnCodeAndJson(403, "Access not allowed.");
+    }
+    break;
   default:
     sendHttpReturnCodeAndJson(403, "Access not allowed.");
     break;
@@ -212,12 +226,12 @@ function checkFilenameParameter($filename, $slotParameters) {
   return $slotParameters['filename'] == $filename;
 }
 
-function getMandatoryPostParameter($parameterName) {
-  $parameter = $_POST[$parameterName];
-  if (!isset($parameter) || is_null($parameter) || empty($parameter)) {
-    sendHttpReturnCodeAndJson(400, ['msg' => 'Missing parameter.', 'err_code' => 4, 'parameters' => ['missing_parameter' => $parameterName]]);
-  }
-  return $parameter;
+function getMandatoryPost($parameterName) {
+  return getMandatoryPostParameter($parameterName, ['msg' => 'Missing parameter.', 'err_code' => 4, 'parameters' => ['missing_parameter' => $parameterName]], true);
+}
+
+function getMandatoryGet($parameterName) {
+  return getMandatoryGetParameter($parameterName, ['msg' => 'Missing parameter.', 'err_code' => 4, 'parameters' => ['missing_parameter' => $parameterName]], true);
 }
 
 function getUUIDFromUri($uri) {

@@ -24,7 +24,35 @@ function loadSlotParameters($slotUUID, $config) {
   return $slotParameters;
 }
 
-function readSlots($jid)  {
+function listFiles($jid, $limit = -1, $offset = 0) {
+    // Read complete set of existing slots per jid (unsorted)
+    $slots = readSlots($jid, $limit, $offset);
+
+    // Sort ascending by timestamp
+    usort($slots, function($a, $b) {
+        return $a['sent_time'] - $b['sent_time'];
+    });
+
+    // Select requested slot subset
+    $offsetCounter = 0;
+    $resultSet = array();
+    foreach ($slots as $slot) {
+        if (0 < $offset && $offsetCounter < $offset) {
+            $offsetCounter++;
+            continue;
+        }
+        $resultSet[] = $slot;
+        
+        if (0 < $limit && $limit == count($resultSet)) {
+            break;
+        }
+    }
+    return ['count' => count($slots),
+            'hasMore' => $offset + count($resultSet) < count($slots),
+            'files' => $resultSet];
+}
+
+function readSlots($jid, $limit = -1, $offset = 0)  {
     global $config;
 
     $jid = getBareJid($jid);
@@ -60,5 +88,6 @@ function readSlots($jid)  {
             }
         }
     }
+    
     return $slots;
 }
