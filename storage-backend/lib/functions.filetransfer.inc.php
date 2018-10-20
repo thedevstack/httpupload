@@ -24,14 +24,21 @@ function loadSlotParameters($slotUUID, $config) {
   return $slotParameters;
 }
 
-function listFiles($jid, $limit = -1, $offset = 0) {
+function listFiles($jid, $limit = -1, $offset = 0, $descending = false) {
     // Read complete set of existing slots per jid (unsorted)
     $slots = readSlots($jid, $limit, $offset);
 
-    // Sort ascending by timestamp
-    usort($slots, function($a, $b) {
-        return $a['sent_time'] - $b['sent_time'];
-    });
+    if ($descending) {
+        // Sort descending by timestamp
+        usort($slots, function($a, $b) {
+            return $b['sent_time'] - $a['sent_time'];
+        });
+    } else {
+        // Sort ascending by timestamp
+        usort($slots, function($a, $b) {
+            return $a['sent_time'] - $b['sent_time'];
+        });
+    }
 
     // Select requested slot subset
     $offsetCounter = 0;

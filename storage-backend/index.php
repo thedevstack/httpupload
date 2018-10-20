@@ -80,7 +80,8 @@ switch ($method) {
       case 'list':
         $limit = getOptionalPostParameter('limit', $config['list_default_limit']);
         $offset = getOptionalPostParameter('offset', 0);
-        $files = listFiles($userJid, $limit, $offset);
+        $descending = getOptionalPostParameter('descending', 'false') === 'true';
+        $files = listFiles($userJid, $limit, $offset, $descending);
         $result = ['list' => $files];
         break;
       case 'upload':
