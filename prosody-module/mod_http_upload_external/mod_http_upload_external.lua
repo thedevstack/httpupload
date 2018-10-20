@@ -21,6 +21,7 @@ local http = (string.len(external_url) >= 5 and string.sub(external_url,1,5) == 
 local json = require"util.json";
 local dataform = require "util.dataforms".new;
 local ltn12 = require"ltn12";
+local rsm = require"util.rsm";
 
 -- depends
 module:depends("disco");
@@ -45,8 +46,15 @@ if filetransfer_manager_ui_url then
 end
 
 local function listfiles(origin, orig_from, stanza, request)
+   local rsmSet = rsm.get(request);
+   local limit = rsmSet and rsmSet.max or -1;
+   local descending = rsmSet and rsmSet.before or false;
+   local index = rsmSet and rsmSet.index or 0;
+   --local before, after = rsmSet and rsmSet.before, rsmSet and rsmSet.after;
+   --if type(before) ~= "string" then before = nil; end
+   
    -- build the body
-   local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=list&user_jid=" .. orig_from;
+   local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=list&user_jid=" .. orig_from .. "&offset=" .. index .. "&limit=" .. limit .. "&descending=" .. tostring(descending);
    -- the request
    local respbody, statuscode = http.request(external_url, reqbody);
    -- respbody is nil in case the server is not reachable
@@ -54,8 +62,10 @@ local function listfiles(origin, orig_from, stanza, request)
      respbody = string.gsub(respbody, "\\/", "/");
    end
   
-   local filelistempty = true;
    local list;
+   local count = 0;
+   local first = {};
+   first.index = index;
   
    -- check the response
    if statuscode == 500 then
@@ -82,8 +92,10 @@ local function listfiles(origin, orig_from, stanza, request)
        return true;
     else
       -- process json response
-      list = respobj.list;
-      filelistempty = list == nil or next(list) == nil;
+      if respobj.list then
+        list = respobj.list.files;
+        count = respobj.list.count;
+      end
     end
   else
     origin.send(st.error_reply(stanza, "cancel", "undefined-condition", "status code: " .. statuscode .. " response: " ..respbody));
@@ -93,7 +105,7 @@ local function listfiles(origin, orig_from, stanza, request)
   local addedfiles = 0;
   local reply = st.reply(stanza);
   reply:tag("list", {xmlns=xmlns_filetransfer_http});
-  if filelistempty == false then
+  if count > 0 then
     for i, file in ipairs(list) do
       local url = file.url;
       if url == "" then
@@ -118,9 +130,10 @@ local function listfiles(origin, orig_from, stanza, request)
       end
     end
   end
-  if filelistempty or addedfiles == 0 then
+  if count == 0 or addedfiles == 0 then
     reply:tag("empty"):up();
   end
+  reply:add_child(rsm.generate{first = first, count = count})
   origin.send(reply);
   return true;
 end
