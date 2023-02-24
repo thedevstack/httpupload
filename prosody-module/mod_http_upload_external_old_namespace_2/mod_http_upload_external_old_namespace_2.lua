@@ -14,11 +14,9 @@ local external_url = module:get_option("http_upload_external_url");
 local xmpp_server_key = module:get_option("http_upload_external_server_key");
 
 -- imports
-require"https";
 local st = require"util.stanza";
 local http = (string.len(external_url) >= 5 and string.sub(external_url,1,5) == "https") and require"ssl.https" or require"socket.http";
 local json = require"util.json";
-local ltn12 = require('ltn12');
 
 -- namespace
 local xmlns_http_upload = "urn:xmpp:http:upload";
@@ -66,20 +64,8 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
    end
 
    -- the request
-   --local respbody, statuscode = http.request(external_url, reqbody);
-   local resptable = {};
-   local res, statuscode = http.request{
-      url = external_url,
-      protocol = "tlsv1_2",
-      method = "POST",
-      headers = {
-         ["content-type"] = "application/x-www-form-urlencoded",
-         ["content-length"] = #reqbody
-      },
-      source = ltn12.source.string(reqbody),
-      sink = ltn12.sink.table(resptable)
-   };
-   local respbody = string.gsub(table.concat(resptable), "\\/", "/")
+   local respbody, statuscode = http.request(external_url, reqbody);
+   respbody = string.gsub(respbody, "\\/", "/")
 
    local get_url = nil;
    local put_url = nil;
