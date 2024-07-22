@@ -15,13 +15,15 @@ local xmpp_server_key = module:get_option("http_upload_external_server_key");
 local filetransfer_manager_ui_url = module:get_option("filetransfer_manager_ui_url");
 
 -- imports
-require"https";
+prosody.unlock_globals();
+--require"https";
 local st = require"util.stanza";
 local http = (string.len(external_url) >= 5 and string.sub(external_url,1,5) == "https") and require"ssl.https" or require"socket.http";
 local json = require"util.json";
 local dataform = require "util.dataforms".new;
 local ltn12 = require"ltn12";
 local rsm = require"util.rsm";
+prosody.lock_globals();
 
 -- depends
 module:depends("disco");
@@ -29,13 +31,15 @@ module:depends("disco");
 -- namespace
 local xmlns_filetransfer_http = "urn:xmpp:filetransfer:http";
 local xmlns_http_upload = "urn:xmpp:http:upload";
+local xmlns_http_upload_0 = "urn:xmpp:http:upload:0";
 
 -- versions
-spec_version = "v0.3";
-impl_version = "v0.3-dev";
+spec_version = "v0.4";
+impl_version = "v0.4-dev";
 
 module:add_feature(xmlns_filetransfer_http);
 module:add_feature(xmlns_http_upload);
+module:add_feature(xmlns_http_upload_0);
 
 if filetransfer_manager_ui_url then
    -- add additional disco info to advertise managing UI
@@ -45,16 +49,47 @@ if filetransfer_manager_ui_url then
    }:form({ ["filetransfer-manager-ui-url"] = filetransfer_manager_ui_url }, "result"));
 end
 
+local function buildRequestBody(reqparams)
+  module:log("debug", "param count " .. #reqparams);
+  local params = {};
+  for k,v in pairs(reqparams) do
+    if v ~= nil then
+      params[#params + 1] = k .. "=" .. tostring(v);
+    end
+  end
+  return table.concat(params, "&");
+end
+
 local function listfiles(origin, orig_from, stanza, request)
    local rsmSet = rsm.get(request);
    local limit = rsmSet and rsmSet.max or -1;
-   local descending = rsmSet and rsmSet.before or false;
+   local descending = rsmSet and rsmSet.before or nil;
    local index = rsmSet and rsmSet.index or 0;
    --local before, after = rsmSet and rsmSet.before, rsmSet and rsmSet.after;
    --if type(before) ~= "string" then before = nil; end
-   
+   local filter = request.attr.filter or nil;
+   local from = request.attr.from or nil;
+   local to = request.attr.to or nil;
+   local with = request.attr.with or nil;
    -- build the body
-   local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=list&user_jid=" .. orig_from .. "&offset=" .. index .. "&limit=" .. limit .. "&descending=" .. tostring(descending);
+   local reqparams = {
+      ["xmpp_server_key"] = xmpp_server_key,
+      ["slot_type"] = "list",
+      ["user_jid"] = orig_from,
+      ["offset"] = index,
+      ["limit"] = limit,
+      ["descending"] = descending,
+      ["filter"] = filter,
+      ["from"] = from,
+      ["to"] = to,
+      ["with"] = with
+    };
+
+   --local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=list&user_jid=" .. orig_from ..
+   -- "&offset=" .. index .. "&limit=" .. limit .. "&descending=" .. tostring(descending);
+   --reqbody = reqbody .. "&filter=" .. filter .. "&from=" .. from .. "&to=" .. to .. "&with=" .. with;
+   local reqbody = buildRequestBody(reqparams);
+   module:log("debug", "Request body: " .. reqbody);
    -- the request
    local respbody, statuscode = http.request(external_url, reqbody);
    -- respbody is nil in case the server is not reachable
@@ -145,8 +180,6 @@ local function deletefile(origin, orig_from, stanza, request)
      origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid fileurl"));
      return true;
   end
-  -- build the body
-  --local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=delete&file_url=" .. fileurl .. "&user_jid=" .. orig_from;
   -- the request
   local resp = {};
   local client, statuscode = http.request{url=fileurl,
@@ -236,21 +269,24 @@ local function version(origin, stanza)
   return true;
 end
 
-local function create_upload_slot(origin, orig_from, stanza, request, namespace, recipient)
+local function create_upload_slot_with_childs(origin, orig_from, stanza, request, namespace, recipient)
    -- validate
-     local filename = request:get_child_text("filename");
-     if not filename then
-        origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid filename"));
-        return true;
-     end
-     local filesize = tonumber(request:get_child_text("size"));
-     if not filesize then
-        origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid file size"));
-        return true;
-     end
+   local filename = request:get_child_text("filename");
+   if not filename then
+      origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid filename"));
+      return true;
+   end
+   local filesize = tonumber(request:get_child_text("size"));
+   if not filesize then
+      origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid file size"));
+      return true;
+   end
 
-     local content_type = request:get_child_text("content-type");
-     
+   local content_type = request:get_child_text("content-type");
+   return create_upload_slot(origin, orig_from, stanza, namespace, recipient, filename, filesize, content_type);
+end
+
+local function create_upload_slot(origin, orig_from, stanza, namespace, recipient, filename, filesize, content_type)
      -- build the body
      local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=upload&size=" .. filesize .. "&filename=" .. filename .. "&user_jid=" .. orig_from .. "&recipient_jid=" .. recipient;
      if content_type then
@@ -333,8 +369,14 @@ local function create_upload_slot(origin, orig_from, stanza, request, namespace,
 
      local reply = st.reply(stanza);
      reply:tag("slot", { xmlns = namespace });
-     reply:tag("get"):text(get_url):up();
-     reply:tag("put"):text(put_url):up();
+     if xmlns == xmlns_http_upload_0 then
+      reply:tag("put", { url = put_url }):up();
+      reply:tag("get", { url = get_url }):up();
+     else
+      reply:tag("get"):text(get_url):up();
+      reply:tag("put"):text(put_url):up();
+     end
+
      origin.send(reply);
      return true;
 end
@@ -403,5 +445,43 @@ module:hook("iq/host/"..xmlns_http_upload..":request", function (event)
      module:log("debug", "incoming request has no type - using default type 'upload'");
   end
 
-  return create_upload_slot(origin, orig_from, stanza, request, xmlns_http_upload, "Unknown");
+  return create_upload_slot_with_childs(origin, orig_from, stanza, request, xmlns_http_upload, "Unknown");
+end);
+
+module:hook("iq/host/"..xmlns_http_upload_0..":request", function (event)
+  local stanza, origin = event.stanza, event.origin;
+  local orig_from = stanza.attr.from;
+  local request = stanza.tags[1];
+  -- local clients only
+  if origin.type ~= "c2s" then
+     origin.send(st.error_reply(stanza, "cancel", "not-authorized"));
+     return true;
+  end
+  -- check configuration
+  if not external_url or not xmpp_server_key then
+     module:log("debug", "missing configuration options: http_upload_external_url and/or http_upload_external_server_key");
+     origin.send(st.error_reply(stanza, "cancel", "internal-server-error"));
+     return true;
+  end
+  local slot_type = request.attr.type;
+  if slot_type then
+     module:log("debug", "incoming request is of type " .. slot_type);
+  else
+     module:log("debug", "incoming request has no type - using default type 'upload'");
+  end
+
+  local filename = request.attr.filename;
+    if not filename then
+       origin.send(st.error_reply(stanza, "modify", "bad-request", "Invalid filename"));
+       return true;
+    end
+    local filesize = tonumber(request.attr.size);
+    if not filesize then
+       origin.send(st.error_reply(stanza, "modify", "bad-request", "Missing or invalid file size"));
+       return true;
+    end
+
+    local content_type = request.attr["content-type"] or "application/octet-stream";
+
+  return create_upload_slot(origin, orig_from, stanza, xmlns_http_upload_0, "Unknown", filename, filesize, content_type);
 end);
