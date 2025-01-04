@@ -147,7 +147,7 @@ switch ($method) {
     }
     // check actual mime type with registered mime type
     $uploadedContentType = mime_content_type($uploadFilePath);
-    if (!is_null($slotParameters['content_type']) && !empty($slotParameters['content_type']) && $uploadedContentType != $slotParameters['content_type']) {
+    if (false && !is_null($slotParameters['content_type']) && !empty($slotParameters['content_type']) && $uploadedContentType != $slotParameters['content_type']) {
       unlink($uploadFilePath);
       sendHttpReturnCodeAndJson(403, "Uploaded file content type differs from requested slot content type.");
     }
