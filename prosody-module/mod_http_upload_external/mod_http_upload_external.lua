@@ -361,7 +361,7 @@ local function create_upload_slot(origin, orig_from, stanza, namespace, recipien
 
      local reply = st.reply(stanza);
      reply:tag("slot", { xmlns = namespace });
-     if xmlns == xmlns_http_upload_0 then
+     if namespace == xmlns_http_upload_0 then
       reply:tag("put", { url = put_url }):up();
       reply:tag("get", { url = get_url }):up();
      else
