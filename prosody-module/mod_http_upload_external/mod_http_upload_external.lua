@@ -320,7 +320,7 @@ local function create_upload_slot(origin, orig_from, stanza, namespace, recipien
               elseif errobj.err_code == 2 then
                  origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
                        :tag("file-too-large", {xmlns=namespace})
-                       :tag("max-size"):text(errobj.parameters.max_file_size));
+                       :tag("max-size"):text(tostring(errobj.parameters.max_file_size)));
                  return true;
               elseif errobj.err_code == 3 then
                  origin.send(st.error_reply(stanza, "modify", "not-acceptable", errobj.msg)
