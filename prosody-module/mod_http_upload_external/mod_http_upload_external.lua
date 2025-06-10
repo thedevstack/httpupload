@@ -15,15 +15,12 @@ local xmpp_server_key = module:get_option("http_upload_external_server_key");
 local filetransfer_manager_ui_url = module:get_option("filetransfer_manager_ui_url");
 
 -- imports
-prosody.unlock_globals();
---require"https";
 local st = require"util.stanza";
 local http = (string.len(external_url) >= 5 and string.sub(external_url,1,5) == "https") and require"ssl.https" or require"socket.http";
 local json = require"util.json";
 local dataform = require "util.dataforms".new;
 local ltn12 = require"ltn12";
 local rsm = require"util.rsm";
-prosody.lock_globals();
 
 -- depends
 module:depends("disco");
@@ -65,8 +62,6 @@ local function listfiles(origin, orig_from, stanza, request)
    local limit = rsmSet and rsmSet.max or -1;
    local descending = rsmSet and rsmSet.before or nil;
    local index = rsmSet and rsmSet.index or 0;
-   --local before, after = rsmSet and rsmSet.before, rsmSet and rsmSet.after;
-   --if type(before) ~= "string" then before = nil; end
    local filter = request.attr.filter or nil;
    local from = request.attr.from or nil;
    local to = request.attr.to or nil;
@@ -85,9 +80,6 @@ local function listfiles(origin, orig_from, stanza, request)
       ["with"] = with
     };
 
-   --local reqbody = "xmpp_server_key=" .. xmpp_server_key .. "&slot_type=list&user_jid=" .. orig_from ..
-   -- "&offset=" .. index .. "&limit=" .. limit .. "&descending=" .. tostring(descending);
-   --reqbody = reqbody .. "&filter=" .. filter .. "&from=" .. from .. "&to=" .. to .. "&with=" .. with;
    local reqbody = buildRequestBody(reqparams);
    module:log("debug", "Request body: " .. reqbody);
    -- the request
